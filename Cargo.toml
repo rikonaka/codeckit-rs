@@ -2,5 +2,12 @@
 name = "codeckit"
 version = "0.1.0"
 edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Some codec collections"
+homepage = "https://github.com/rikonaka/codeckit-rs"
+documentation = "https://docs.rs/codeckit"
+repository = "https://github.com/rikonaka/codeckit-rs"
+readme = "README.md"
+keywords = ["codec"]
 
 [dependencies]
