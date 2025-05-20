@@ -30,7 +30,7 @@ impl Base64 {
                     // 1111 1111 => 1111 0000 & 0000 1111
                     // 4 & 4
                     let mask: u8 = 0b00001111;
-                    let ind = prev + i >> 4;
+                    let ind = prev + (i >> 4);
                     prev = (i & mask) << 2;
 
                     let c = BASE64_MAP[ind as usize];
@@ -95,21 +95,19 @@ mod tests {
     }
     #[test]
     fn base64_encode() {
-        // let test = "test";
-        // let base64 = Base64;
-        // let output = base64.encode(test.as_bytes());
-        // println!("{}", output);
+        let test = "test";
+        let base64 = Base64;
+        let output = base64.encode(test.as_bytes());
+        println!("{}", output);
 
         let test = "fasdfa";
         let base64 = Base64;
         let output = base64.encode(test.as_bytes());
         println!("{}", output);
 
-        // let test = "中文测试";
-        // let base64 = Base64;
-        // let output = base64.encode(test.as_bytes());
-        // println!("{}", output);
-        // 5Lit5LaH5NWL6K+V
-        // 5Lit5paH5rWL6K+V
+        let test = "中文测试";
+        let base64 = Base64;
+        let output = base64.encode(test.as_bytes());
+        println!("{}", output);
     }
 }
