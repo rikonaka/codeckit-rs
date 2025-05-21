@@ -5,33 +5,21 @@ const BASE64_MAP: [&str; 64] = [
     "5", "6", "7", "8", "9", "+", "/",
 ];
 
-const BASE64_REVERSE_MAP: [u8; 463] = [
+const BASE64_REVERSE_MAP: [u8; 256] = [
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 62, 255, 255, 255, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255,
+    255, 255, 255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+    19, 20, 21, 22, 23, 24, 25, 255, 255, 255, 255, 255, 255, 26, 27, 28, 29, 30, 31, 32, 33, 34,
+    35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 255, 255, 255, 255, 255,
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 62, 255, 255, 255, 63, 52, 53, 54, 55, 56, 57, 58,
-    59, 60, 61, 255, 255, 255, 255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
-    14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 255, 255, 255, 255, 255, 255, 26, 27, 28, 29,
-    30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 ];
-
 pub struct Base64;
 
 impl Base64 {
@@ -82,43 +70,70 @@ impl Base64 {
         ret
     }
     pub fn decode(&self, input: &str) -> String {
-        let mut ret = Vec::new();
-        let mut flag = 0;
+        let mut ret: Vec<u8> = Vec::with_capacity((input.len() / 4) * 3);
+        let mut flag: u8 = 0;
         let mut prev: u8 = 0;
-
         for i in input.chars() {
             if i == '=' {
                 break;
             }
-            let ind = BASE64_REVERSE_MAP[i as usize];
+            let i_rev = BASE64_REVERSE_MAP[i as usize];
+            // drop invalid characters
+            // 255 means invalid character
+            if i_rev == 255 {
+                continue;
+            }
             match flag {
                 0 => {
-                    prev = ind << 2;
-                    flag += 1;
+                    prev = i_rev << 2;
+                    flag = 1;
                 }
                 1 => {
-                    let ind_1 = prev + (ind >> 4);
-                    prev = (ind & 0b00001111) << 4;
-
-                    ret.push(ind_1);
-                    flag += 1;
+                    let ch = prev + ((i_rev & 0b00110000) >> 4);
+                    if ch != 0 {
+                        ret.push(ch);
+                    }
+                    prev = (i_rev & 0b00001111) << 4;
+                    flag = 2;
                 }
                 2 => {
-                    let ind_1 = prev + (ind >> 2);
-                    prev = (ind & 0b00111111) << 6;
-
-                    ret.push(ind_1);
-                    flag += 1;
+                    let ch = prev + ((i_rev & 0b00111100) >> 2);
+                    if ch != 0 {
+                        ret.push(ch);
+                    }
+                    prev = (i_rev & 0b00000011) << 6;
+                    flag = 3;
                 }
-                _ => {
-                    ret.push(ind + prev);
+                3 => {
+                    let ch = prev + (i_rev & 0b00111111);
+                    if ch != 0 {
+                        ret.push(ch);
+                    }
+                    prev = 0;
                     flag = 0;
                 }
+                _ => unreachable!(),
             }
         }
-
-        let ret_str = String::from_utf8_lossy(&ret).to_string();
-        ret_str
+        match flag {
+            1 => {
+                if prev != 0 {
+                    ret.push(prev);
+                }
+            }
+            2 => {
+                if prev != 0 {
+                    ret.push(prev);
+                }
+            }
+            3 => {
+                if prev != 0 {
+                    ret.push(prev);
+                }
+            }
+            _ => (), // ignore 0
+        }
+        String::from_utf8_lossy(&ret).to_string()
     }
 }
 
@@ -126,7 +141,33 @@ impl Base64 {
 mod tests {
     use super::*;
     #[test]
+    fn base64_encode() {
+        let test = "test";
+        let base64 = Base64;
+        let output = base64.encode(test.as_bytes());
+        println!("{}", output);
+        // decoding
+        // let output = base64.decode(&output);
+        // println!("{:?}", output);
+
+        let test = "fasdfa";
+        let base64 = Base64;
+        let output = base64.encode(test.as_bytes());
+        println!("{}", output);
+        let output = base64.decode(&output);
+        println!("{:?}", output);
+
+        let test = "中文测试";
+        let base64 = Base64;
+        let output = base64.encode(test.as_bytes());
+        println!("{}", output);
+        let output = base64.decode(&output);
+        println!("{:?}", output);
+    }
+    #[test]
     fn script1() {
+        // generate the base64 map
+        println!(">>>>>>>>>>>>>>");
         let bb = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
         let mut res = Vec::new();
         for b in bb.chars() {
@@ -135,31 +176,20 @@ mod tests {
         }
         let res_str = res.join(", ");
         println!("[{}]", res_str);
+
+        println!(">>>>>>>>>>>>>>");
+        let mut test: Vec<u8> = vec![255; 256];
+        for (i, b) in bb.chars().into_iter().enumerate() {
+            let b_u8 = b as u8;
+            test[b_u8 as usize] = i as u8;
+        }
+
+        println!("{:?}", test);
     }
     #[test]
     fn shift() {
         let x: u8 = 0b00001111;
         let y: u8 = x << 2;
         println!("{}", y);
-    }
-    #[test]
-    fn base64_encode() {
-        let test = "test";
-        let base64 = Base64;
-        let output = base64.encode(test.as_bytes());
-        println!("{}", output);
-
-        let output = base64.decode(&output);
-        println!("{:?}", output);
-
-        let test = "fasdfa";
-        let base64 = Base64;
-        let output = base64.encode(test.as_bytes());
-        println!("{}", output);
-
-        let test = "中文测试";
-        let base64 = Base64;
-        let output = base64.encode(test.as_bytes());
-        println!("{}", output);
     }
 }
