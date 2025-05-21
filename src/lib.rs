@@ -24,7 +24,7 @@ pub struct Base64;
 
 impl Base64 {
     /// encodes the input bytes into a Base64 string.
-    pub fn encode(&self, input: &[u8]) -> String {
+    pub fn encode(input: &[u8]) -> String {
         let mut ret = String::with_capacity(((input.len() + 2) / 3) * 4);
         let mut flag = 0;
         let mut prev: u8 = 0;
@@ -69,7 +69,7 @@ impl Base64 {
 
         ret
     }
-    pub fn decode(&self, input: &str) -> String {
+    pub fn decode(input: &str) -> String {
         let mut ret: Vec<u8> = Vec::with_capacity((input.len() / 4) * 3);
         let mut flag: u8 = 0;
         let mut prev: u8 = 0;
@@ -143,25 +143,22 @@ mod tests {
     #[test]
     fn base64_encode() {
         let test = "test";
-        let base64 = Base64;
-        let output = base64.encode(test.as_bytes());
+        let output = Base64::encode(test.as_bytes());
         println!("{}", output);
         // decoding
         // let output = base64.decode(&output);
         // println!("{:?}", output);
 
         let test = "fasdfa";
-        let base64 = Base64;
-        let output = base64.encode(test.as_bytes());
+        let output = Base64::encode(test.as_bytes());
         println!("{}", output);
-        let output = base64.decode(&output);
+        let output = Base64::decode(&output);
         println!("{:?}", output);
 
         let test = "中文测试";
-        let base64 = Base64;
-        let output = base64.encode(test.as_bytes());
+        let output = Base64::encode(test.as_bytes());
         println!("{}", output);
-        let output = base64.decode(&output);
+        let output = Base64::decode(&output);
         println!("{:?}", output);
     }
     #[test]
