@@ -1,5 +1,13 @@
 # codeckit
 
+|     Function     |                Description                 |
+| :--------------: | :----------------------------------------: |
+| `Base32::encode` | Encodes a byte slice into a Base32 string  |
+| `Base32::decode` | Decodes a Base32 string into a byte vector |
+| `Base58::encode` | Encodes a byte slice into a Base58 string  |
+| `Base58::decode` | Decodes a Base58 string into a byte vector |
+| `Base64::encode` | Encodes a byte slice into a Base64 string  |
+| `Base64::decode` | Decodes a Base64 string into a byte vector |
 
 ## Base64
 

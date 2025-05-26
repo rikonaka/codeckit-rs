@@ -23,6 +23,7 @@ const BASE32_REVERSE_MAP: [u8; 256] = [
 pub struct Base32;
 
 impl Base32 {
+    /// Encodes the input bytes into a Base32 string.
     pub fn encode(input: &[u8]) -> String {
         let mut ret = String::with_capacity(((input.len() + 4) / 5) * 8);
         let mut flag = 0;
@@ -58,29 +59,106 @@ impl Base32 {
                     prev = (i & 0b00000011) << 3;
                     flag = 4;
                 }
+                4 => {
+                    let ind = prev + (i >> 5);
+                    let ind_1 = i & 0b00011111;
+                    ret.push_str(BASE32_MAP[ind as usize]);
+                    ret.push_str(BASE32_MAP[ind_1 as usize]);
+                    prev = 0;
+                    flag = 0;
+                }
                 _ => unreachable!(),
             }
         }
 
-        match flag {
-            1 => {
-                ret.push_str(BASE32_MAP[prev as usize]);
-                ret.push_str("======");
+        ret.push_str(BASE32_MAP[prev as usize]);
+        // add padding if necessary
+        while ret.len() % 8 != 0 {
+            ret.push('=');
+        }
+        ret
+    }
+    /// Decodes a Base32 string into a Vec<u8>.
+    /// This function ignores invalid characters automatically and not returns an error.
+    pub fn decode(input: &str) -> Vec<u8> {
+        let mut ret = Vec::new();
+        let mut prev: u8 = 0;
+        let mut flag = 0;
+
+        for c in input.chars() {
+            if c == '=' {
+                break;
             }
-            2 => {
-                ret.push_str(BASE32_MAP[prev as usize]);
-                ret.push_str("=====");
+            let i_rev = BASE32_REVERSE_MAP[c as usize];
+            // drop invalid characters and 255 means invalid character
+            if i_rev == 255 {
+                continue;
             }
-            3 => {
-                ret.push_str(BASE32_MAP[prev as usize]);
-                ret.push_str("====");
+            match flag {
+                // i_rev(5bits) => prev
+                0 => {
+                    prev = i_rev << 3;
+                    flag = 1;
+                }
+                // prev(5bits) + i(3bits)
+                // new prev(2bits)
+                1 => {
+                    let ch = prev + (i_rev >> 2);
+                    ret.push(ch);
+                    prev = (i_rev & 0b00000011) << 6;
+                    flag = 2;
+                }
+                // new prev(7bits) = prev(2bits) + i(5bits)
+                2 => {
+                    prev = prev + (i_rev << 1);
+                    flag = 3;
+                }
+                // prev(7bits) + i(1bit)
+                // new prev(4bits)
+                3 => {
+                    let ch = prev + (i_rev >> 4);
+                    ret.push(ch);
+                    prev = (i_rev & 0b00001111) << 4;
+                    flag = 4;
+                }
+                // prev(4bits) + i(4bits)
+                // new prev(1bits)
+                4 => {
+                    let ch = prev + (i_rev >> 1);
+                    ret.push(ch);
+                    prev = (i_rev & 0b00000001) << 7;
+                    flag = 5;
+                }
+                // new prev(6) = prev(1bits) + i(5bits)
+                5 => {
+                    prev = prev + (i_rev << 2);
+                    flag = 6;
+                }
+                // prev(6bits) + i(2bits)
+                // new prev(3bits)
+                6 => {
+                    let ch = prev + (i_rev >> 3);
+                    ret.push(ch);
+                    prev = (i_rev & 0b00000111) << 5;
+                    flag = 7;
+                }
+                // prev(3bits) + i(5bits)
+                // new prev(0bits)
+                7 => {
+                    let ch = prev + i_rev;
+                    ret.push(ch);
+                    prev = 0;
+                    flag = 0;
+                }
+                _ => unreachable!(),
             }
-            _ => (),
         }
 
         ret
     }
 }
+
+pub struct Base58;
 
 const BASE64_MAP: [&str; 64] = [
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S",
@@ -151,18 +229,11 @@ impl Base64 {
             }
         }
 
-        match flag {
-            1 => {
-                ret.push_str(BASE64_MAP[prev as usize]);
-                ret.push_str("==");
-            }
-            2 => {
-                ret.push_str(BASE64_MAP[prev as usize]);
-                ret.push_str("=");
-            }
-            _ => (),
+        ret.push_str(BASE64_MAP[prev as usize]);
+        // add padding if necessary
+        while ret.len() % 4 != 0 {
+            ret.push('=');
         }
-
         ret
     }
     /// Decodes a Base64 string into a Vec<u8>.
@@ -213,17 +284,7 @@ impl Base64 {
             }
         }
         match flag {
-            1 => {
-                if prev != 0 {
-                    ret.push(prev);
-                }
-            }
-            2 => {
-                if prev != 0 {
-                    ret.push(prev);
-                }
-            }
-            3 => {
+            1 | 2 | 3 => {
                 if prev != 0 {
                     ret.push(prev);
                 }
@@ -238,7 +299,31 @@ impl Base64 {
 mod tests {
     use super::*;
     #[test]
-    fn base64_encode() {
+    fn test_base32() {
+        let test = "test";
+        let output = Base32::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base32::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "fasdfa";
+        // println!("{:?}", test.as_bytes());
+        let output = Base32::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base32::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "中文测试";
+        let output = Base32::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base32::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+    }
+    #[test]
+    fn test_base64() {
         let test = "test";
         let output = Base64::encode(test.as_bytes());
         println!("{}", output);
