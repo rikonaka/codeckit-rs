@@ -153,12 +153,80 @@ impl Base32 {
                 _ => unreachable!(),
             }
         }
-
         ret
     }
 }
 
+const BASE58_MAP: [&str; 58] = [
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "J", "K",
+    "L", "M", "N", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e",
+    "f", "g", "h", "i", "j", "k", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y",
+    "z",
+    // 'o', 'l' are omitted to avoid confusion with '0' and '1'
+    // 'O', 'I' are omitted to avoid confusion with '0' and '1'
+    // '0', '1' are omitted to avoid confusion with 'O' and 'I'
+    // '2', '3', ..., '9' are included
+];
+
+const BASE58_REVERSE_MAP: [u8; 256] = [
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 255, 255,
+    255, 255, 255, 255, 255, 9, 10, 11, 12, 13, 14, 15, 16, 255, 17, 18, 19, 20, 21, 255, 22, 23,
+    24, 25, 26, 27, 28, 29, 30, 31, 32, 255, 255, 255, 255, 255, 255, 33, 34, 35, 36, 37, 38, 39,
+    40, 41, 42, 43, 255, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+];
+
 pub struct Base58;
+
+impl Base58 {
+    fn divmod58(num: &[u8]) -> (Vec<u8>, u8) {
+        let mut quotient = Vec::new();
+        let mut remainder: u8 = 0;
+        for &digit in num {
+            let value = (remainder as usize) * 256 + digit as usize;
+            remainder = (value % 58) as u8;
+            quotient.push((value / 58) as u8);
+        }
+        // remove leading zeros
+        while quotient.len() > 1 && quotient[0] == 0 {
+            quotient.remove(0);
+        }
+        (quotient, remainder)
+    }
+    /// Encodes the input bytes into a Base58 string.
+    pub fn encode(input: &[u8]) -> String {
+        let zeros = input.iter().take_while(|&&x| x == 0).count();
+
+        let mut num = input.to_vec();
+        let mut encoded = String::new();
+
+        while num.iter().all(|&x| x != 0) {
+            let (quotient, remainder) = Self::divmod58(&num);
+            encoded.push_str(BASE58_MAP[remainder as usize]);
+            num = quotient;
+        }
+
+        for _ in 0..zeros {
+            encoded.push('1');
+        }
+
+        encoded = encoded.chars().rev().collect();
+        encoded
+    }
+
+    /// Decodes a Base58 string into a Vec<u8>.
+    pub fn decode(input: &str) -> Vec<u8> {
+        todo!()
+    }
+}
 
 const BASE64_MAP: [&str; 64] = [
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S",
@@ -299,6 +367,30 @@ impl Base64 {
 mod tests {
     use super::*;
     #[test]
+    fn test_base58() {
+        let test = "test";
+        let output = Base58::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base58::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "fasdfa";
+        // println!("{:?}", test.as_bytes());
+        let output = Base58::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base58::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "中文测试";
+        let output = Base58::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base58::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+    }
+    #[test]
     fn test_base32() {
         let test = "test";
         let output = Base32::encode(test.as_bytes());
@@ -378,6 +470,12 @@ mod tests {
         gen_map(base32);
         println!(">>>>>>>>>>>>>>");
         gen_res_map(base32);
+
+        let base58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+        println!(">>>>>>>>>>>>>>");
+        gen_map(base58);
+        println!(">>>>>>>>>>>>>>");
+        gen_res_map(base58);
     }
     #[test]
     fn shift() {

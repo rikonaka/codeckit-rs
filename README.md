@@ -17,7 +17,7 @@
 | `Z85::encode`       | Encodes a byte slice into a Z85 string.             |
 | `Z85::decode`       | Decodes a Z85 string into a byte vector.            |
 
-## Base64
+## Base64 Example
 
 ```rust
 use codeckit::Base64;
