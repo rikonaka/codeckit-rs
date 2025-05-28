@@ -191,7 +191,7 @@ impl Base58 {
         let mut quotient = Vec::new();
         let mut remainder: u8 = 0;
         for &digit in num {
-            let value = (remainder as usize) * 256 + digit as usize;
+            let value = (remainder as u32) * 256 + digit as u32;
             remainder = (value % 58) as u8;
             quotient.push((value / 58) as u8);
         }
@@ -287,7 +287,7 @@ impl Base62 {
         let mut quotient = Vec::new();
         let mut remainder: u8 = 0;
         for &digit in num {
-            let value = (remainder as usize) * 256 + digit as usize;
+            let value = (remainder as u32) * 256 + digit as u32;
             remainder = (value % 62) as u8;
             quotient.push((value / 62) as u8);
         }
@@ -488,9 +488,393 @@ impl Base64 {
     }
 }
 
+const BASE64_URL_MAP: [&str; 64] = [
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S",
+    "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l",
+    "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4",
+    "5", "6", "7", "8", "9", "-", "_",
+];
+
+const BASE64_URL_REVERSE_MAP: [u8; 256] = [
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 62, 255, 255, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255,
+    255, 255, 255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+    19, 20, 21, 22, 23, 24, 25, 255, 255, 255, 255, 63, 255, 26, 27, 28, 29, 30, 31, 32, 33, 34,
+    35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+];
+
+pub struct Base64Url;
+
+impl Base64Url {
+    /// Encodes the input bytes into a Base64Url string.
+    /// If padding is true, it will add '=' padding characters to the end of the string.
+    pub fn encode(input: &[u8], padding: bool) -> String {
+        let mut ret = String::with_capacity(((input.len() + 2) / 3) * 4);
+        let mut flag = 0;
+        let mut prev: u8 = 0;
+
+        for &i in input {
+            match flag {
+                0 => {
+                    let ind = i >> 2;
+                    prev = (i & 0b00000011) << 4;
+                    ret.push_str(BASE64_URL_MAP[ind as usize]);
+                    flag = 1;
+                }
+                1 => {
+                    let ind = prev + (i >> 4);
+                    prev = (i & 0b00001111) << 2;
+                    ret.push_str(BASE64_URL_MAP[ind as usize]);
+                    flag = 2;
+                }
+                2 => {
+                    let ind = prev + (i >> 6);
+                    let ind_1 = i & 0b00111111;
+                    ret.push_str(BASE64_URL_MAP[ind as usize]);
+                    ret.push_str(BASE64_URL_MAP[ind_1 as usize]);
+                    prev = 0;
+                    flag = 0;
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        ret.push_str(BASE64_URL_MAP[prev as usize]);
+        if padding {
+            // add padding if necessary
+            while ret.len() % 4 != 0 {
+                ret.push('=');
+            }
+        }
+        ret
+    }
+    /// Decodes a Base64Url string into a Vec<u8>.
+    pub fn decode(input: &str) -> Vec<u8> {
+        let mut ret: Vec<u8> = Vec::with_capacity((input.len() / 4) * 3);
+        let mut flag: u8 = 0;
+        let mut prev: u8 = 0;
+        for i in input.chars() {
+            if i == '=' {
+                break;
+            }
+            let i_rev = BASE64_URL_REVERSE_MAP[i as usize];
+            // drop invalid characters and 255 means invalid character
+            if i_rev == 255 {
+                continue;
+            }
+            match flag {
+                0 => {
+                    prev = i_rev << 2;
+                    flag = 1;
+                }
+                1 => {
+                    let ch = prev + ((i_rev & 0b00110000) >> 4);
+                    if ch != 0 {
+                        ret.push(ch);
+                    }
+                    prev = (i_rev & 0b00001111) << 4;
+                    flag = 2;
+                }
+                2 => {
+                    let ch = prev + ((i_rev & 0b00111100) >> 2);
+                    if ch != 0 {
+                        ret.push(ch);
+                    }
+                    prev = (i_rev & 0b00000011) << 6;
+                    flag = 3;
+                }
+                3 => {
+                    let ch = prev + (i_rev & 0b00111111);
+                    if ch != 0 {
+                        ret.push(ch);
+                    }
+                    prev = 0;
+                    flag = 0;
+                }
+                _ => unreachable!(),
+            }
+        }
+        match flag {
+            1 | 2 | 3 => {
+                if prev != 0 {
+                    ret.push(prev);
+                }
+            }
+            _ => (), // ignore 0
+        }
+        ret
+    }
+}
+
+pub struct Base85;
+
+impl Base85 {
+    fn divmod85(num: &[u8]) -> (Vec<u8>, u8) {
+        let mut quotient = Vec::new();
+        let mut remainder: u8 = 0;
+        for &digit in num {
+            let value = (remainder as u32) * 256 + digit as u32;
+            remainder = (value % 85) as u8;
+            quotient.push((value / 85) as u8);
+        }
+        // remove leading zeros
+        while quotient.len() > 1 && quotient[0] == 0 {
+            quotient.remove(0);
+        }
+        (quotient, remainder)
+    }
+    /// Encodes the input bytes into a Base85/Ascii85 string.
+    pub fn encode(input: &[u8]) -> String {
+        let mut num = input.to_vec();
+        let mut encoded = String::new();
+
+        while !num.iter().all(|&x| x == 0) {
+            let (quotient, remainder) = Self::divmod85(&num);
+            let remainder_char = (remainder + 33) as char;
+            encoded.push(remainder_char);
+            num = quotient;
+        }
+
+        encoded = encoded.chars().rev().collect();
+        encoded
+    }
+    /// Decodes a Base85/Ascii85 string into a Vec<u8>.
+    pub fn decode(input: &str) -> Vec<u8> {
+        let mut num = vec![0u8];
+        for c in input.chars() {
+            let val = (c as u8) - 33; // Base85 uses characters starting from '!'
+            if val > 84 {
+                // invalid character, skip it
+                continue;
+            }
+            let mut carry = val as u32;
+            for n in num.iter_mut() {
+                let total = *n as u32 * 85 + carry;
+                *n = (total & 0xff) as u8;
+                carry = total >> 8;
+            }
+
+            while carry > 0 {
+                num.push((carry & 0xff) as u8);
+                carry >>= 8;
+            }
+        }
+
+        let mut n_zeros = 0;
+        for c in input.chars() {
+            if c == '0' {
+                n_zeros += 1;
+            } else {
+                break;
+            }
+        }
+        let mut result = vec![0u8; n_zeros];
+        result.extend(num.iter().rev());
+        result
+    }
+}
+
+const BASE85_GIT_MAP: [&str; 85] = [
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "I",
+    "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b",
+    "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u",
+    "v", "w", "x", "y", "z", "!", "#", "$", "%", "&", "(", ")", "*", "+", "-", ";", "<", "=", ">",
+    "?", "@", "^", "_", "`", "{", "|", "}", "~",
+];
+
+const BASE85_GIT_REVERSE_MAP: [u8; 256] = [
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62, 255, 63, 64, 65, 66,
+    255, 67, 68, 69, 70, 255, 71, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 255, 72, 73, 74, 75, 76,
+    77, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+    33, 34, 35, 255, 255, 255, 78, 79, 80, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+    50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 81, 82, 83, 84, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255,
+];
+
+pub struct Base85Git;
+
+impl Base85Git {
+    fn divmod85(num: &[u8]) -> (Vec<u8>, u8) {
+        let mut quotient = Vec::new();
+        let mut remainder: u8 = 0;
+        for &digit in num {
+            let value = (remainder as u32) * 256 + digit as u32;
+            remainder = (value % 85) as u8;
+            quotient.push((value / 85) as u8);
+        }
+        // remove leading zeros
+        while quotient.len() > 1 && quotient[0] == 0 {
+            quotient.remove(0);
+        }
+        (quotient, remainder)
+    }
+    /// Encodes the input bytes into a Base85/Ascii85 string.
+    pub fn encode(input: &[u8]) -> String {
+        let mut num = input.to_vec();
+        let mut encoded = String::new();
+
+        while !num.iter().all(|&x| x == 0) {
+            let (quotient, remainder) = Self::divmod85(&num);
+            let remainder_str = BASE85_GIT_MAP[remainder as usize];
+            encoded.push_str(remainder_str);
+            num = quotient;
+        }
+
+        encoded = encoded.chars().rev().collect();
+        encoded
+    }
+    /// Decodes a Base85/Ascii85 string into a Vec<u8>.
+    pub fn decode(input: &str) -> Vec<u8> {
+        let mut num = vec![0u8];
+        for c in input.chars() {
+            let val = BASE85_GIT_REVERSE_MAP[c as usize];
+            if val > 84 {
+                // invalid character, skip it
+                continue;
+            }
+            let mut carry = val as u32;
+            for n in num.iter_mut() {
+                let total = *n as u32 * 85 + carry;
+                *n = (total & 0xff) as u8;
+                carry = total >> 8;
+            }
+
+            while carry > 0 {
+                num.push((carry & 0xff) as u8);
+                carry >>= 8;
+            }
+        }
+
+        let mut n_zeros = 0;
+        for c in input.chars() {
+            if c == '0' {
+                n_zeros += 1;
+            } else {
+                break;
+            }
+        }
+        let mut result = vec![0u8; n_zeros];
+        result.extend(num.iter().rev());
+        result
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_base85_git() {
+        let test = "test";
+        let output = Base85Git::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base85Git::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "fasdfa";
+        // println!("{:?}", test.as_bytes());
+        let output = Base85Git::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base85Git::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "hello";
+        // println!("{:?}", test.as_bytes());
+        let output = Base85Git::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base85Git::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test: u32 = 0xffffffff;
+        // println!("{:?}", test.as_bytes());
+        let output = Base85Git::encode(&test.to_be_bytes());
+        println!("{}", output);
+        let output = Base85Git::decode(&output);
+        println!("{:?}", output);
+
+        let test = "中文测试";
+        // println!("{:?}", test.as_bytes());
+        let output = Base85Git::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base85Git::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+    }
+    #[test]
+    fn test_base85() {
+        let test = "test";
+        let output = Base85::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base85::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "fasdfa";
+        // println!("{:?}", test.as_bytes());
+        let output = Base85::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base85::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "hello";
+        // println!("{:?}", test.as_bytes());
+        let output = Base85::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base85::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "中文测试";
+        // println!("{:?}", test.as_bytes());
+        let output = Base85::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Base85::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+    }
+    #[test]
+    fn test_base64_url() {
+        let test = "test";
+        let output = Base64Url::encode(test.as_bytes(), false);
+        println!("{}", output);
+        let output = Base64Url::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "fasdfa";
+        // println!("{:?}", test.as_bytes());
+        let output = Base64Url::encode(test.as_bytes(), false);
+        println!("{}", output);
+        let output = Base64Url::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "中文测试";
+        // println!("{:?}", test.as_bytes());
+        let output = Base64Url::encode(test.as_bytes(), false);
+        println!("{}", output);
+        let output = Base64Url::decode(&output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+    }
     #[test]
     fn test_base62() {
         let test = "test";
@@ -633,6 +1017,25 @@ mod tests {
         gen_map(base62);
         println!(">>>>>>>>>>>>>>");
         gen_res_map(base62);
+
+        let base64url = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        println!(">>>>>>>>>>>>>>");
+        gen_map(base64url);
+        println!(">>>>>>>>>>>>>>");
+        gen_res_map(base64url);
+
+        let base85git =
+            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~";
+        println!(">>>>>>>>>>>>>>");
+        gen_map(base85git);
+        println!(">>>>>>>>>>>>>>");
+        gen_res_map(base85git);
+
+        let chars = base85git.chars().collect::<Vec<char>>();
+        let w85 = chars[82];
+        println!("w85: {}", w85);
+        let w55 = chars[55];
+        println!("w55: {}", w55);
     }
     #[test]
     fn shift() {
