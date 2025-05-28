@@ -208,7 +208,7 @@ impl Base58 {
         let mut num = input.to_vec();
         let mut encoded = String::new();
 
-        while num.iter().all(|&x| x != 0) {
+        while !num.iter().all(|&x| x == 0) {
             let (quotient, remainder) = Self::divmod58(&num);
             encoded.push_str(BASE58_MAP[remainder as usize]);
             num = quotient;
@@ -224,7 +224,37 @@ impl Base58 {
 
     /// Decodes a Base58 string into a Vec<u8>.
     pub fn decode(input: &str) -> Vec<u8> {
-        todo!()
+        let mut num = vec![0u8];
+        for c in input.chars() {
+            let val = BASE58_REVERSE_MAP[c as usize];
+            let mut carry = val as u32;
+            if carry == 255 {
+                // invalid character, skip it
+                continue;
+            }
+            for n in num.iter_mut() {
+                let total = *n as u32 * 58 + carry;
+                *n = (total & 0xff) as u8;
+                carry = total >> 8;
+            }
+
+            while carry > 0 {
+                num.push((carry & 0xff) as u8);
+                carry >>= 8;
+            }
+        }
+
+        let mut n_zeros = 0;
+        for c in input.chars() {
+            if c == '1' {
+                n_zeros += 1;
+            } else {
+                break;
+            }
+        }
+        let mut result = vec![0u8; n_zeros];
+        result.extend(num.iter().rev());
+        result
     }
 }
 
@@ -384,6 +414,7 @@ mod tests {
         println!("{:?}", output);
 
         let test = "中文测试";
+        // println!("{:?}", test.as_bytes());
         let output = Base58::encode(test.as_bytes());
         println!("{}", output);
         let output = Base58::decode(&output);
