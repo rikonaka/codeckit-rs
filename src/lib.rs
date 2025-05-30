@@ -1332,6 +1332,12 @@ mod tests {
         gen_map(z85);
         println!(">>>>>>>>>>>>>>");
         gen_res_map(z85);
+
+        let base91 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,./:;<=>?@[]^_`{|}~\"";
+        println!(">>>>>>>>>>>>>>");
+        gen_map(base91);
+        println!(">>>>>>>>>>>>>>");
+        gen_res_map(base91);
     }
     #[test]
     fn shift() {
