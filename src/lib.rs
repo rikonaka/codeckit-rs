@@ -721,7 +721,7 @@ impl Ascii85 {
         let mut input_chars: Vec<u8> = input.chars().into_iter().map(|x| x as u8 - 33).collect();
         let mut padding: u8 = 0;
         while input_chars.len() % 5 != 0 {
-            input_chars.push(0); // pad with zeros to make the length a multiple of 5
+            input_chars.push(84); // pad with 84 to make the length a multiple of 5
             padding += 1;
         }
 
@@ -823,14 +823,13 @@ impl Base85Git {
             let encoded_chunk = Self::inner_encode(chunk);
 
             let encoded_chunk = if i == ind - 1 {
-                let encoded_chunk = match padding {
+                match padding {
                     0 => encoded_chunk,                   // no padding
                     1 => encoded_chunk[0..4].to_string(), // keep first 4 chars
                     2 => encoded_chunk[0..3].to_string(), // keep first 3 chars
                     3 => encoded_chunk[0..2].to_string(), // keep first 2 chars
                     _ => unreachable!(),                  // should never happen
-                };
-                encoded_chunk
+                }
             } else {
                 encoded_chunk
             };
@@ -876,7 +875,7 @@ impl Base85Git {
             .collect();
         let mut padding: u8 = 0;
         while input_chars.len() % 5 != 0 {
-            input_chars.push(0); // pad with zeros to make the length a multiple of 5
+            input_chars.push(84); // pad with 84 to make the length a multiple of 5
             padding += 1;
         }
 
@@ -930,6 +929,15 @@ mod tests {
     fn test_ascii85() {
         let test = "hello";
         // let test = "test";
+        println!("{:?}", test.as_bytes());
+        let output = Ascii85::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Ascii85::decode(&output);
+        println!("{:?}", output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "testz00";
         println!("{:?}", test.as_bytes());
         let output = Ascii85::encode(test.as_bytes());
         println!("{}", output);
