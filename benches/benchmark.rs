@@ -2,7 +2,7 @@ use criterion::Criterion;
 use criterion::criterion_group;
 use criterion::criterion_main;
 use rand::Rng;
-use rand::distributions::Alphanumeric;
+use rand::distr::Alphanumeric;
 use std::hint::black_box;
 
 // test
@@ -11,7 +11,7 @@ use base64::engine::general_purpose::STANDARD;
 use codeckit::Base64;
 
 fn rand_string(length: usize) -> String {
-    let rand_string: String = rand::thread_rng()
+    let rand_string: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(length)
         .map(char::from)

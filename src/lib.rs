@@ -614,9 +614,9 @@ impl Base64Url {
     }
 }
 
-pub struct Base85;
+pub struct Ascii85;
 
-impl Base85 {
+impl Ascii85 {
     fn divmod85(num: &[u8]) -> (Vec<u8>, u8) {
         let mut quotient = Vec::new();
         let mut remainder: u8 = 0;
@@ -631,54 +631,122 @@ impl Base85 {
         }
         (quotient, remainder)
     }
-    /// Encodes the input bytes into a Base85/Ascii85 string.
+    /// Encodes a 4-byte chunk into a Ascii85 string.
+    /// This function is used internally by the `encode` method.
+    fn inner_encode(input: &[u8]) -> String {
+        if input.iter().all(|&x| x == 0) {
+            return "z".to_string(); // special case for all zeros
+        } else {
+            let mut encoded = String::new();
+            let mut num = input.to_vec();
+
+            while !num.iter().all(|&x| x == 0) {
+                let (quotient, remainder) = Self::divmod85(&num);
+                let remainder_char = (remainder + 33) as char;
+                encoded.push(remainder_char);
+                num = quotient;
+            }
+            encoded.chars().rev().collect()
+        }
+    }
+    /// Encodes the input bytes into a Base85 string.
     pub fn encode(input: &[u8]) -> String {
         let mut num = input.to_vec();
-        let mut encoded = String::new();
-
-        while !num.iter().all(|&x| x == 0) {
-            let (quotient, remainder) = Self::divmod85(&num);
-            let remainder_char = (remainder + 33) as char;
-            encoded.push(remainder_char);
-            num = quotient;
+        let mut padding: u8 = 0;
+        while num.len() % 4 != 0 {
+            num.push(0); // pad with zeros to make the length a multiple of 4
+            padding += 1;
         }
 
-        encoded = encoded.chars().rev().collect();
-        encoded
+        let ind = num.len() / 4;
+        let mut ret = Vec::new();
+        for i in 0..ind {
+            let start = i * 4;
+            let end = start + 4;
+            let chunk = &num[start..end];
+            let encoded_chunk = Self::inner_encode(chunk);
+
+            let encoded_chunk = if i == ind - 1 {
+                let encoded_chunk = match padding {
+                    0 => encoded_chunk,                   // no padding
+                    1 => encoded_chunk[0..4].to_string(), // keep first 4 chars
+                    2 => encoded_chunk[0..3].to_string(), // keep first 3 chars
+                    3 => encoded_chunk[0..2].to_string(), // keep first 2 chars
+                    _ => unreachable!(),                  // should never happen
+                };
+                encoded_chunk
+            } else {
+                encoded_chunk
+            };
+            ret.push(encoded_chunk);
+        }
+        ret.join("")
     }
-    /// Decodes a Base85/Ascii85 string into a Vec<u8>.
-    pub fn decode(input: &str) -> Vec<u8> {
-        let mut num = vec![0u8];
-        for c in input.chars() {
-            let val = (c as u8) - 33; // Base85 uses characters starting from '!'
-            if val > 84 {
+    /// Decodes 5 characters of Base85 into a Vec<u8>.
+    /// This function is used internally by the `decode` method.
+    fn inner_decode(input_chars: &[u8]) -> Vec<u8> {
+        let mut num: Vec<u8> = vec![0];
+        for &c in input_chars {
+            if c > 84 {
                 // invalid character, skip it
                 continue;
             }
-            let mut carry = val as u32;
-            for n in num.iter_mut() {
-                let total = *n as u32 * 85 + carry;
-                *n = (total & 0xff) as u8;
-                carry = total >> 8;
-            }
-
-            while carry > 0 {
-                num.push((carry & 0xff) as u8);
-                carry >>= 8;
-            }
-        }
-
-        let mut n_zeros = 0;
-        for c in input.chars() {
-            if c == '0' {
-                n_zeros += 1;
+            if c + 33 == ('z' as u8) {
+                // special case for all zeros
+                num.extend(vec![0, 0, 0, 0]);
             } else {
-                break;
+                let mut carry = c as u32;
+                for n in num.iter_mut() {
+                    let total = *n as u32 * 85 + carry;
+                    *n = (total & 0xff) as u8;
+                    carry = total >> 8;
+                }
+
+                while carry > 0 {
+                    num.push((carry & 0xff) as u8);
+                    carry >>= 8;
+                }
             }
         }
-        let mut result = vec![0u8; n_zeros];
-        result.extend(num.iter().rev());
-        result
+        num.reverse();
+        num
+    }
+    /// Decodes a Base85 string into a Vec<u8>.
+    pub fn decode(input: &str) -> Vec<u8> {
+        let mut ret = Vec::new();
+        if input.len() == 0 {
+            return ret; // empty input
+        }
+
+        let mut input_chars: Vec<u8> = input.chars().into_iter().map(|x| x as u8 - 33).collect();
+        let mut padding: u8 = 0;
+        while input_chars.len() % 5 != 0 {
+            input_chars.push(0); // pad with zeros to make the length a multiple of 5
+            padding += 1;
+        }
+
+        let ind = input_chars.len() / 5;
+        for i in 0..ind {
+            let start = i * 5;
+            let end = start + 5;
+            let chunk = &input_chars[start..end];
+            let decoded_chunk = Self::inner_decode(chunk);
+
+            let decoded_chunk = if i == ind - 1 {
+                // remove padding
+                match padding {
+                    0 => decoded_chunk,                // no padding
+                    1 => decoded_chunk[0..3].to_vec(), // keep first 3 bytes
+                    2 => decoded_chunk[0..2].to_vec(), // keep first 2 bytes
+                    3 => decoded_chunk[0..1].to_vec(), // keep first 1 bytes
+                    _ => unreachable!(),               // should never happen
+                }
+            } else {
+                decoded_chunk
+            };
+            ret.extend(decoded_chunk);
+        }
+        ret
     }
 }
 
@@ -723,31 +791,63 @@ impl Base85Git {
         }
         (quotient, remainder)
     }
-    /// Encodes the input bytes into a Base85/Ascii85 string.
-    pub fn encode(input: &[u8]) -> String {
-        let mut num = input.to_vec();
+    /// Encodes a 4-byte chunk into a Ascii85 string.
+    /// This function is used internally by the `encode` method.
+    fn inner_encode(input: &[u8]) -> String {
         let mut encoded = String::new();
+        let mut num = input.to_vec();
 
         while !num.iter().all(|&x| x == 0) {
             let (quotient, remainder) = Self::divmod85(&num);
-            let remainder_str = BASE85_GIT_MAP[remainder as usize];
-            encoded.push_str(remainder_str);
+            let remainder_char = BASE85_GIT_MAP[remainder as usize];
+            encoded.push_str(remainder_char);
             num = quotient;
         }
-
-        encoded = encoded.chars().rev().collect();
-        encoded
+        encoded.chars().rev().collect()
     }
-    /// Decodes a Base85/Ascii85 string into a Vec<u8>.
-    pub fn decode(input: &str) -> Vec<u8> {
-        let mut num = vec![0u8];
-        for c in input.chars() {
-            let val = BASE85_GIT_REVERSE_MAP[c as usize];
-            if val > 84 {
+    /// Encodes the input bytes into a Base85 string.
+    pub fn encode(input: &[u8]) -> String {
+        let mut num = input.to_vec();
+        let mut padding: u8 = 0;
+        while num.len() % 4 != 0 {
+            num.push(0); // pad with zeros to make the length a multiple of 4
+            padding += 1;
+        }
+
+        let ind = num.len() / 4;
+        let mut ret = Vec::new();
+        for i in 0..ind {
+            let start = i * 4;
+            let end = start + 4;
+            let chunk = &num[start..end];
+            let encoded_chunk = Self::inner_encode(chunk);
+
+            let encoded_chunk = if i == ind - 1 {
+                let encoded_chunk = match padding {
+                    0 => encoded_chunk,                   // no padding
+                    1 => encoded_chunk[0..4].to_string(), // keep first 4 chars
+                    2 => encoded_chunk[0..3].to_string(), // keep first 3 chars
+                    3 => encoded_chunk[0..2].to_string(), // keep first 2 chars
+                    _ => unreachable!(),                  // should never happen
+                };
+                encoded_chunk
+            } else {
+                encoded_chunk
+            };
+            ret.push(encoded_chunk);
+        }
+        ret.join("")
+    }
+    /// Decodes 5 characters of Base85 into a Vec<u8>.
+    /// This function is used internally by the `decode` method.
+    fn inner_decode(input_chars: &[u8]) -> Vec<u8> {
+        let mut num: Vec<u8> = vec![0];
+        for &c in input_chars {
+            if c > 84 {
                 // invalid character, skip it
                 continue;
             }
-            let mut carry = val as u32;
+            let mut carry = c as u32;
             for n in num.iter_mut() {
                 let total = *n as u32 * 85 + carry;
                 *n = (total & 0xff) as u8;
@@ -759,18 +859,49 @@ impl Base85Git {
                 carry >>= 8;
             }
         }
-
-        let mut n_zeros = 0;
-        for c in input.chars() {
-            if c == '0' {
-                n_zeros += 1;
-            } else {
-                break;
-            }
+        num.reverse();
+        num
+    }
+    /// Decodes a Base85 string into a Vec<u8>.
+    pub fn decode(input: &str) -> Vec<u8> {
+        let mut ret = Vec::new();
+        if input.len() == 0 {
+            return ret; // empty input
         }
-        let mut result = vec![0u8; n_zeros];
-        result.extend(num.iter().rev());
-        result
+
+        let mut input_chars: Vec<u8> = input
+            .chars()
+            .into_iter()
+            .map(|x| BASE85_GIT_REVERSE_MAP[x as usize])
+            .collect();
+        let mut padding: u8 = 0;
+        while input_chars.len() % 5 != 0 {
+            input_chars.push(0); // pad with zeros to make the length a multiple of 5
+            padding += 1;
+        }
+
+        let ind = input_chars.len() / 5;
+        for i in 0..ind {
+            let start = i * 5;
+            let end = start + 5;
+            let chunk = &input_chars[start..end];
+            let decoded_chunk = Self::inner_decode(chunk);
+
+            let decoded_chunk = if i == ind - 1 {
+                // remove padding
+                match padding {
+                    0 => decoded_chunk,                // no padding
+                    1 => decoded_chunk[0..3].to_vec(), // keep first 3 bytes
+                    2 => decoded_chunk[0..2].to_vec(), // keep first 2 bytes
+                    3 => decoded_chunk[0..1].to_vec(), // keep first 1 bytes
+                    _ => unreachable!(),               // should never happen
+                }
+            } else {
+                decoded_chunk
+            };
+            ret.extend(decoded_chunk);
+        }
+        ret
     }
 }
 
@@ -779,34 +910,12 @@ mod tests {
     use super::*;
     #[test]
     fn test_base85_git() {
-        let test = "test";
-        let output = Base85Git::encode(test.as_bytes());
-        println!("{}", output);
-        let output = Base85Git::decode(&output);
-        let output = String::from_utf8(output).unwrap();
-        println!("{:?}", output);
-
-        let test = "fasdfa";
-        // println!("{:?}", test.as_bytes());
-        let output = Base85Git::encode(test.as_bytes());
-        println!("{}", output);
-        let output = Base85Git::decode(&output);
-        let output = String::from_utf8(output).unwrap();
-        println!("{:?}", output);
-
         let test = "hello";
         // println!("{:?}", test.as_bytes());
         let output = Base85Git::encode(test.as_bytes());
         println!("{}", output);
         let output = Base85Git::decode(&output);
         let output = String::from_utf8(output).unwrap();
-        println!("{:?}", output);
-
-        let test: u32 = 0xffffffff;
-        // println!("{:?}", test.as_bytes());
-        let output = Base85Git::encode(&test.to_be_bytes());
-        println!("{}", output);
-        let output = Base85Git::decode(&output);
         println!("{:?}", output);
 
         let test = "中文测试";
@@ -818,35 +927,23 @@ mod tests {
         println!("{:?}", output);
     }
     #[test]
-    fn test_base85() {
-        let test = "test";
-        let output = Base85::encode(test.as_bytes());
-        println!("{}", output);
-        let output = Base85::decode(&output);
-        let output = String::from_utf8(output).unwrap();
-        println!("{:?}", output);
-
-        let test = "fasdfa";
-        // println!("{:?}", test.as_bytes());
-        let output = Base85::encode(test.as_bytes());
-        println!("{}", output);
-        let output = Base85::decode(&output);
-        let output = String::from_utf8(output).unwrap();
-        println!("{:?}", output);
-
+    fn test_ascii85() {
         let test = "hello";
-        // println!("{:?}", test.as_bytes());
-        let output = Base85::encode(test.as_bytes());
+        // let test = "test";
+        println!("{:?}", test.as_bytes());
+        let output = Ascii85::encode(test.as_bytes());
         println!("{}", output);
-        let output = Base85::decode(&output);
+        let output = Ascii85::decode(&output);
+        println!("{:?}", output);
         let output = String::from_utf8(output).unwrap();
         println!("{:?}", output);
 
         let test = "中文测试";
-        // println!("{:?}", test.as_bytes());
-        let output = Base85::encode(test.as_bytes());
+        println!("{:?}", test.as_bytes());
+        let output = Ascii85::encode(test.as_bytes());
         println!("{}", output);
-        let output = Base85::decode(&output);
+        let output = Ascii85::decode(&output);
+        println!("{:?}", output);
         let output = String::from_utf8(output).unwrap();
         println!("{:?}", output);
     }
