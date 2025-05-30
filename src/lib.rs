@@ -904,9 +904,193 @@ impl Base85Git {
     }
 }
 
+const Z85_MAP: [&str; 85] = [
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f", "g", "h", "i",
+    "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "A", "B",
+    "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U",
+    "V", "W", "X", "Y", "Z", ".", "-", ":", "+", "=", "^", "!", "/", "*", "?", "&", "<", ">", "(",
+    ")", "[", "]", "{", "}", "@", "%", "$", "#",
+];
+
+const Z85_REVERSE_MAP: [u8; 256] = [
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 68, 255, 84, 83, 82, 72,
+    255, 75, 76, 70, 65, 255, 63, 62, 69, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 64, 255, 73, 66, 74, 71,
+    81, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+    59, 60, 61, 77, 255, 78, 67, 255, 255, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+    24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 79, 255, 80, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255,
+];
+
+pub struct Z85;
+
+impl Z85 {
+    fn divmod85(num: &[u8]) -> (Vec<u8>, u8) {
+        let mut quotient = Vec::new();
+        let mut remainder: u8 = 0;
+        for &digit in num {
+            let value = (remainder as u32) * 256 + digit as u32;
+            remainder = (value % 85) as u8;
+            quotient.push((value / 85) as u8);
+        }
+        // remove leading zeros
+        while quotient.len() > 1 && quotient[0] == 0 {
+            quotient.remove(0);
+        }
+        (quotient, remainder)
+    }
+    /// Encodes a 4-byte chunk into a Ascii85 string.
+    /// This function is used internally by the `encode` method.
+    fn inner_encode(input: &[u8]) -> String {
+        let mut encoded = String::new();
+        let mut num = input.to_vec();
+
+        while !num.iter().all(|&x| x == 0) {
+            let (quotient, remainder) = Self::divmod85(&num);
+            let remainder_char = Z85_MAP[remainder as usize];
+            encoded.push_str(remainder_char);
+            num = quotient;
+        }
+        encoded.chars().rev().collect()
+    }
+    /// Encodes the input bytes into a Base85 string.
+    pub fn encode(input: &[u8]) -> String {
+        let mut num = input.to_vec();
+        let mut padding: u8 = 0;
+        while num.len() % 4 != 0 {
+            num.push(0); // pad with zeros to make the length a multiple of 4
+            padding += 1;
+        }
+
+        let ind = num.len() / 4;
+        let mut ret = Vec::new();
+        for i in 0..ind {
+            let start = i * 4;
+            let end = start + 4;
+            let chunk = &num[start..end];
+            let encoded_chunk = Self::inner_encode(chunk);
+
+            let encoded_chunk = if i == ind - 1 {
+                match padding {
+                    0 => encoded_chunk,                   // no padding
+                    1 => encoded_chunk[0..4].to_string(), // keep first 4 chars
+                    2 => encoded_chunk[0..3].to_string(), // keep first 3 chars
+                    3 => encoded_chunk[0..2].to_string(), // keep first 2 chars
+                    _ => unreachable!(),                  // should never happen
+                }
+            } else {
+                encoded_chunk
+            };
+            ret.push(encoded_chunk);
+        }
+        ret.join("")
+    }
+    /// Decodes 5 characters of Base85 into a Vec<u8>.
+    /// This function is used internally by the `decode` method.
+    fn inner_decode(input_chars: &[u8]) -> Vec<u8> {
+        let mut num: Vec<u8> = vec![0];
+        for &c in input_chars {
+            if c > 84 {
+                // invalid character, skip it
+                continue;
+            }
+            let mut carry = c as u32;
+            for n in num.iter_mut() {
+                let total = *n as u32 * 85 + carry;
+                *n = (total & 0xff) as u8;
+                carry = total >> 8;
+            }
+
+            while carry > 0 {
+                num.push((carry & 0xff) as u8);
+                carry >>= 8;
+            }
+        }
+        num.reverse();
+        num
+    }
+    /// Decodes a Base85 string into a Vec<u8>.
+    pub fn decode(input: &str) -> Vec<u8> {
+        let mut ret = Vec::new();
+        if input.len() == 0 {
+            return ret; // empty input
+        }
+
+        let mut input_chars: Vec<u8> = input
+            .chars()
+            .into_iter()
+            .map(|x| Z85_REVERSE_MAP[x as usize])
+            .collect();
+        let mut padding: u8 = 0;
+        while input_chars.len() % 5 != 0 {
+            input_chars.push(84); // pad with 84 to make the length a multiple of 5
+            padding += 1;
+        }
+
+        let ind = input_chars.len() / 5;
+        for i in 0..ind {
+            let start = i * 5;
+            let end = start + 5;
+            let chunk = &input_chars[start..end];
+            let decoded_chunk = Self::inner_decode(chunk);
+
+            let decoded_chunk = if i == ind - 1 {
+                // remove padding
+                match padding {
+                    0 => decoded_chunk,                // no padding
+                    1 => decoded_chunk[0..3].to_vec(), // keep first 3 bytes
+                    2 => decoded_chunk[0..2].to_vec(), // keep first 2 bytes
+                    3 => decoded_chunk[0..1].to_vec(), // keep first 1 bytes
+                    _ => unreachable!(),               // should never happen
+                }
+            } else {
+                decoded_chunk
+            };
+            ret.extend(decoded_chunk);
+        }
+        ret
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_z85() {
+        let test = "hello";
+        // let test = "test";
+        println!("{:?}", test.as_bytes());
+        let output = Z85::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Z85::decode(&output);
+        println!("{:?}", output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "testz00";
+        println!("{:?}", test.as_bytes());
+        let output = Z85::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Z85::decode(&output);
+        println!("{:?}", output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+
+        let test = "中文测试";
+        println!("{:?}", test.as_bytes());
+        let output = Z85::encode(test.as_bytes());
+        println!("{}", output);
+        let output = Z85::decode(&output);
+        println!("{:?}", output);
+        let output = String::from_utf8(output).unwrap();
+        println!("{:?}", output);
+    }
     #[test]
     fn test_base85_git() {
         let test = "hello";
@@ -1141,6 +1325,13 @@ mod tests {
         println!("w85: {}", w85);
         let w55 = chars[55];
         println!("w55: {}", w55);
+
+        let z85 =
+            "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#";
+        println!(">>>>>>>>>>>>>>");
+        gen_map(z85);
+        println!(">>>>>>>>>>>>>>");
+        gen_res_map(z85);
     }
     #[test]
     fn shift() {
