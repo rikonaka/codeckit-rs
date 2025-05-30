@@ -791,7 +791,7 @@ impl Base85Git {
         }
         (quotient, remainder)
     }
-    /// Encodes a 4-byte chunk into a Ascii85 string.
+    /// Encodes a 4-byte chunk into a Base85Git string.
     /// This function is used internally by the `encode` method.
     fn inner_encode(input: &[u8]) -> String {
         let mut encoded = String::new();
@@ -805,7 +805,7 @@ impl Base85Git {
         }
         encoded.chars().rev().collect()
     }
-    /// Encodes the input bytes into a Base85 string.
+    /// Encodes the input bytes into a Base85Git string.
     pub fn encode(input: &[u8]) -> String {
         let mut num = input.to_vec();
         let mut padding: u8 = 0;
@@ -837,7 +837,7 @@ impl Base85Git {
         }
         ret.join("")
     }
-    /// Decodes 5 characters of Base85 into a Vec<u8>.
+    /// Decodes 5 characters of Base85Git into a Vec<u8>.
     /// This function is used internally by the `decode` method.
     fn inner_decode(input_chars: &[u8]) -> Vec<u8> {
         let mut num: Vec<u8> = vec![0];
@@ -861,7 +861,7 @@ impl Base85Git {
         num.reverse();
         num
     }
-    /// Decodes a Base85 string into a Vec<u8>.
+    /// Decodes a Base85Git string into a Vec<u8>.
     pub fn decode(input: &str) -> Vec<u8> {
         let mut ret = Vec::new();
         if input.len() == 0 {
@@ -945,7 +945,7 @@ impl Z85 {
         }
         (quotient, remainder)
     }
-    /// Encodes a 4-byte chunk into a Ascii85 string.
+    /// Encodes a 4-byte chunk into a Z85 string.
     /// This function is used internally by the `encode` method.
     fn inner_encode(input: &[u8]) -> String {
         let mut encoded = String::new();
@@ -959,7 +959,7 @@ impl Z85 {
         }
         encoded.chars().rev().collect()
     }
-    /// Encodes the input bytes into a Base85 string.
+    /// Encodes the input bytes into a Z85 string.
     pub fn encode(input: &[u8]) -> String {
         let mut num = input.to_vec();
         let mut padding: u8 = 0;
@@ -991,7 +991,7 @@ impl Z85 {
         }
         ret.join("")
     }
-    /// Decodes 5 characters of Base85 into a Vec<u8>.
+    /// Decodes 5 characters of Z85 into a Vec<u8>.
     /// This function is used internally by the `decode` method.
     fn inner_decode(input_chars: &[u8]) -> Vec<u8> {
         let mut num: Vec<u8> = vec![0];
@@ -1015,7 +1015,7 @@ impl Z85 {
         num.reverse();
         num
     }
-    /// Decodes a Base85 string into a Vec<u8>.
+    /// Decodes a Z85 string into a Vec<u8>.
     pub fn decode(input: &str) -> Vec<u8> {
         let mut ret = Vec::new();
         if input.len() == 0 {
